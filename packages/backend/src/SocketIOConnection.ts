@@ -242,8 +242,6 @@ export default class SocketIOCollaboration {
         delete this.backendCounts[socket.nsp.name]
         delete this.io.nsps[socket.nsp.name]
       }
-      onSocketDisconnection &&
-        (await onSocketDisconnection(socket, this.backendCounts))
     } catch (e) {
       console.log('Error in slate-collab onDisconnect', e)
     }
