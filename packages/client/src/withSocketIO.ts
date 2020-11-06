@@ -23,8 +23,6 @@ export interface WithSocketIOEditor {
 
   send: (op: CollabAction) => void
   receive: (op: CollabAction) => void
-
-  destroy: () => void
 }
 
 /**
@@ -61,34 +59,32 @@ const withSocketIO = <T extends AutomergeEditor>(
 
         onConnect && onConnect()
       })
+
+      e.socket.on('disconnect', () => {
+        e.gabageCursor()
+
+        onDisconnect && onDisconnect()
+      })
+
+      e.socket.on('error', (msg: string) => {
+        onError && onError(msg)
+      })
+
+      e.socket.on('msg', (data: CollabAction) => {
+        e.receive(data)
+      })
     }
 
-    e.socket.on('error', (msg: string) => {
-      onError && onError(msg)
-    })
-
-    e.socket.on('msg', (data: CollabAction) => {
-      e.receive(data)
-    })
-
-    e.socket.on('disconnect', () => {
-      e.gabageCursor()
-
-      onDisconnect && onDisconnect()
-    })
-
-    e.socket.connect()
+    !e.socket.connected && e.socket.connect()
 
     return e
   }
 
   /**
-   * Disconnect from Socket.
+   * Close socket and connection.
    */
 
   e.disconnect = () => {
-    e.socket.removeListener('msg')
-
     e.socket.close()
 
     e.closeConnection()
@@ -115,16 +111,6 @@ const withSocketIO = <T extends AutomergeEditor>(
 
   e.send = (msg: CollabAction) => {
     e.socket.emit('msg', msg)
-  }
-
-  /**
-   * Close socket and connection.
-   */
-
-  e.destroy = () => {
-    e.socket.close()
-
-    e.closeConnection()
   }
 
   autoConnect && e.connect()
