@@ -5,7 +5,6 @@ import { AutomergeEditor } from './automerge-editor'
 import { CollabAction } from '@slate-sheikah/bridge'
 
 export interface SocketIOPluginOptions {
-  url: string
   connectOpts: SocketIOClient.ConnectOpts
   autoConnect?: boolean
 
@@ -35,14 +34,7 @@ const withSocketIO = <T extends AutomergeEditor>(
 ) => {
   const e = editor as T & WithSocketIOEditor
 
-  const {
-    onConnect,
-    onDisconnect,
-    onError,
-    connectOpts,
-    url,
-    autoConnect
-  } = options
+  const { onConnect, onDisconnect, onError, connectOpts, autoConnect } = options
 
   /**
    * Connect to Socket.
@@ -50,7 +42,7 @@ const withSocketIO = <T extends AutomergeEditor>(
 
   e.connect = () => {
     if (!e.socket) {
-      e.socket = io(url, { ...connectOpts })
+      e.socket = io({ ...connectOpts })
 
       e.socket.on('connect', () => {
         e.clientId = e.socket.id
