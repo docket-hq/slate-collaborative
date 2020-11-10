@@ -205,6 +205,11 @@ export default class SocketIOCollaboration {
     try {
       const { onDocumentSave } = this.options
 
+      //if the backend has already been cleaned up, stop trying to do this.
+      if (!this.backends[docId]) {
+        return
+      }
+
       const doc = this.backends[docId].getDocument(docId)
 
       if (!doc) {
@@ -235,7 +240,11 @@ export default class SocketIOCollaboration {
 
       onSocketDisconnection &&
         (await onSocketDisconnection(socket, this.backendCounts))
+    } catch (e) {
+      console.log('Error in slate-collab onDisconnect', e)
+    }
 
+    try {
       //if all the sockets have disconnected, free up that precious, precious memory.
       if (this.backendCounts[socket.nsp.name] == 0) {
         delete this.backends[socket.nsp.name]
@@ -243,7 +252,7 @@ export default class SocketIOCollaboration {
         delete this.io.nsps[socket.nsp.name]
       }
     } catch (e) {
-      console.log('Error in slate-collab onDisconnect', e)
+      console.log('Error freeing memory', e)
     }
   }
 
