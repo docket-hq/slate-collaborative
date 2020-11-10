@@ -252,17 +252,21 @@ export default class SocketIOCollaboration {
    */
 
   garbageCursors = (nsp: string) => {
-    const doc = this.backends[nsp].getDocument(nsp)
+    try {
+      const doc = this.backends[nsp].getDocument(nsp)
 
-    if (!doc.cursors) return
+      if (!doc.cursors) return
 
-    const namespace = this.io.of(nsp)
+      const namespace = this.io.of(nsp)
 
-    Object.keys(doc?.cursors)?.forEach(key => {
-      if (!namespace.sockets[key]) {
-        this.backends[nsp].garbageCursor(nsp, key)
-      }
-    })
+      Object.keys(doc?.cursors)?.forEach(key => {
+        if (!namespace.sockets[key]) {
+          this.backends[nsp].garbageCursor(nsp, key)
+        }
+      })
+    } catch (e) {
+      //don't necessarily care if this fails.
+    }
   }
 
   /**
