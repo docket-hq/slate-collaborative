@@ -49,7 +49,10 @@ export default class SocketIOCollaboration {
    */
 
   constructor(options: SocketIOCollaborationOptions) {
-    this.io = io(options.entry, options.connectOpts)
+    this.io = io(options.entry, {
+      ...options.connectOpts,
+      perMessageDeflate: true
+    })
 
     this.options = options
 
@@ -150,7 +153,9 @@ export default class SocketIOCollaboration {
       this.backends[name].createConnection(
         id,
         ({ type, payload }: CollabAction) => {
-          socket.emit('msg', { type, payload: { id: conn.id, ...payload } })
+          socket
+            .compress(false)
+            .emit('msg', { type, payload: { id: conn.id, ...payload } })
         }
       )
 
@@ -159,7 +164,8 @@ export default class SocketIOCollaboration {
       socket.on('disconnect', this.onDisconnect(id, socket))
 
       const doc = this.backends[name].getDocument(name)
-      socket.emit('msg', {
+
+      socket.compress(true).emit('msg', {
         type: 'document',
         payload: Automerge.save<SyncDoc>(doc)
       })
