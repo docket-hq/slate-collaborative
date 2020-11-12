@@ -10,6 +10,7 @@ export interface AutomergeOptions {
   docId: string
   cursorData?: CursorData
   preserveExternalHistory?: boolean
+  refreshDocOnConnect?: boolean
 }
 
 /**
@@ -24,7 +25,8 @@ const withAutomerge = <T extends Editor>(
 
   const { onChange } = e
 
-  const { docId, cursorData, preserveExternalHistory } = options || {}
+  const { docId, cursorData, preserveExternalHistory, refreshDocOnConnect } =
+    options || {}
 
   e.docSet = new Automerge.DocSet()
 
@@ -84,7 +86,7 @@ const withAutomerge = <T extends Editor>(
    */
 
   e.receiveDocument = data => {
-    AutomergeEditor.receiveDocument(e, docId, data)
+    AutomergeEditor.receiveDocument(e, docId, data, refreshDocOnConnect)
 
     createConnection()
   }

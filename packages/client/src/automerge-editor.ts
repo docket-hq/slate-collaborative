@@ -86,14 +86,19 @@ export const AutomergeEditor = {
    * Receive and apply document to Automerge docSet
    */
 
-  receiveDocument: (e: AutomergeEditor, docId: string, data: string) => {
+  receiveDocument: (
+    e: AutomergeEditor,
+    docId: string,
+    data: string,
+    refreshDoc?: boolean
+  ) => {
     const currentDoc = e.docSet.getDoc(docId)
 
     const externalDoc = Automerge.load<SyncDoc>(data)
 
     const mergedDoc = Automerge.merge<SyncDoc>(
       externalDoc,
-      currentDoc || Automerge.init()
+      refreshDoc ? Automerge.init() : currentDoc
     )
 
     e.docSet.setDoc(docId, mergedDoc)
