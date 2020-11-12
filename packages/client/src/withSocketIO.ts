@@ -11,8 +11,8 @@ export interface SocketIOPluginOptions {
 
   onConnect?: () => void
   onDisconnect?: () => void
-
   onError?: (msg: string) => void
+  onDocumentLoaded?: () => void
 }
 
 export interface WithSocketIOEditor {
@@ -38,6 +38,7 @@ const withSocketIO = <T extends AutomergeEditor>(
   const {
     onConnect,
     onDisconnect,
+    onDocumentLoaded = () => {},
     onError,
     connectOpts,
     url,
@@ -101,7 +102,7 @@ const withSocketIO = <T extends AutomergeEditor>(
       case 'operation':
         return e.receiveOperation(msg.payload)
       case 'document':
-        return e.receiveDocument(msg.payload)
+        return e.receiveDocument(msg.payload, onDocumentLoaded)
     }
   }
 
