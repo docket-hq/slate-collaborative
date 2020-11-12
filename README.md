@@ -30,6 +30,7 @@ Check [detailed example](https://github.com/docket-hq/slate-sheikah/blob/master/
   onDisconnect?: () => void // disconnect callback
   onError?: (reason: string) => void // error callback
   preserveExternalHistory?: boolean // preserve slate-history operations form other clients
+  onDocumentLoaded?: => void // callback that runs once a document is loaded on the client
 }
 ```
 
