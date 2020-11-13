@@ -92,11 +92,18 @@ export const AutomergeEditor = {
     data: string,
     onDocumentLoaded: () => void
   ) => {
+    const currentDoc = e.docSet.getDoc(docId)
     const externalDoc = Automerge.load<SyncDoc>(data)
-    e.docSet.setDoc(docId, externalDoc)
+
+    const mergedDoc = Automerge.merge<SyncDoc>(
+      externalDoc,
+      currentDoc || Automerge.init()
+    )
+
+    e.docSet.setDoc(docId, mergedDoc)
 
     Editor.withoutNormalizing(e, () => {
-      e.children = toJS(externalDoc).children
+      e.children = toJS(mergedDoc).children
 
       e.onChange()
       onDocumentLoaded()
