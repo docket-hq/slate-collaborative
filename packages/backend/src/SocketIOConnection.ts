@@ -16,6 +16,8 @@ export interface SocketIOCollaborationOptions {
   connectOpts?: SocketIO.ServerOptions
   defaultValue?: Node[]
   saveFrequency?: number
+  cleanFrequency?: number
+  cleanThreshold?: number
   onAuthRequest?: (
     query: Object,
     socket?: SocketIO.Socket
@@ -38,10 +40,17 @@ export interface BackendCounts {
   [key: string]: number
 }
 
+export interface Backends {
+  automerge: AutomergeBackend
+  ready: boolean
+  failed: boolean
+  cleanupTimer: number
+}
+
 export default class SocketIOCollaboration {
   private io: SocketIO.Server
   private options: SocketIOCollaborationOptions
-  private backends: AutomergeBackend[] = []
+  private backends: Backends[] = []
   private backendCounts: BackendCounts[] = []
 
   /**
@@ -62,6 +71,13 @@ export default class SocketIOCollaboration {
       this.saveDocument,
       options.saveFrequency || 2000
     )
+
+    this.backends = []
+    this.backendCounts = []
+    //spawn cleaner
+    setTimeout(() => {
+      this.cleaner()
+    }, options.cleanFrequency || 60000)
 
     return this
   }
@@ -92,31 +108,75 @@ export default class SocketIOCollaboration {
    * @param socket
    */
   private init = async (socket: SocketIO.Socket) => {
+    const path = socket.nsp.name
     try {
-      const path = socket.nsp.name
       const query = socket.handshake.query
       const { onDocumentLoad } = this.options
 
       //make some backends if this is the first time this meeting is loaded.
       if (!this.backends[path]) {
-        this.backends[path] = new AutomergeBackend()
-        this.backendCounts[path] = 0
+        this.backends[path] = {
+          automerge: new AutomergeBackend(),
+          ready: false,
+          failed: false,
+          cleanupTimer:
+            Math.floor(Date.now() / 1000) +
+            (this.options.cleanThreshold || 30) * 60
+        }
 
-        if (!this.backends[path].getDocument(path)) {
+        this.backendCounts[path] = 1
+
+        if (!this.backends[path].automerge.getDocument(path)) {
           const doc = onDocumentLoad
             ? await onDocumentLoad(path, query)
             : this.options.defaultValue
 
           if (doc) {
-            this.backends[path].appendDocument(path, doc)
+            this.backends[path].automerge.appendDocument(path, doc)
+            this.backends[path].ready = true
           }
         }
+      } else {
+        this.backendCounts[path] = this.backendCounts[path] + 1
       }
-
-      this.backendCounts[path] = this.backendCounts[path] + 1
     } catch (e) {
       console.log('Error in slate-collab init', e)
+      this.backends[path].failed = true
     }
+  }
+
+  /**
+   * memory cleaner process that checks the backeds to see if there aren't connections and if the timer has expired.
+   */
+  private cleaner() {
+    console.log('Cleaner running')
+    const targets: string[] = []
+
+    try {
+      Object.keys(this.backends).forEach(key => {
+        if (
+          this.backendCounts[key] === 0 &&
+          this.backends[key].cleanupTimer < Math.floor(Date.now() / 1000)
+        ) {
+          targets.push(key)
+        }
+      })
+
+      console.log(`Found ${targets.length} documents to clean.`)
+      if (targets.length) {
+        //free up that precious, precious memory.
+        targets.forEach(key => {
+          delete this.backends[key]
+          delete this.io.nsps[key]
+          delete this.backendCounts[key]
+        })
+      }
+    } catch (e) {
+      console.log('Error freeing memory', e)
+    }
+    setTimeout(() => {
+      this.cleaner()
+    }, this.options.cleanFrequency || 60000)
   }
 
   /**
@@ -144,39 +204,47 @@ export default class SocketIOCollaboration {
    */
 
   private onConnect = async (socket: SocketIO.Socket) => {
-    try {
-      const { onSocketConnection } = this.options
-      const { id, conn } = socket
-      const { name } = socket.nsp
-      await this.init(socket)
+    //if this isn't the first connection and we're not set up yet, delay this for a second.
+    const { name } = socket.nsp
+    if (this.backends[name] && !this.backends[name].ready) {
+      setTimeout(() => {
+        this.onConnect(socket)
+      }, 1000)
+    } else {
+      try {
+        const { onSocketConnection } = this.options
+        const { id, conn } = socket
 
-      this.backends[name].createConnection(
-        id,
-        ({ type, payload }: CollabAction) => {
-          socket
-            .compress(false)
-            .emit('msg', { type, payload: { id: conn.id, ...payload } })
-        }
-      )
+        await this.init(socket)
 
-      socket.on('msg', this.onMessage(id, name))
+        this.backends[name].automerge.createConnection(
+          id,
+          ({ type, payload }: CollabAction) => {
+            socket
+              .compress(false)
+              .emit('msg', { type, payload: { id: conn.id, ...payload } })
+          }
+        )
 
-      socket.on('disconnect', this.onDisconnect(id, socket))
+        socket.on('msg', this.onMessage(id, name))
 
-      const doc = this.backends[name].getDocument(name)
+        socket.on('disconnect', this.onDisconnect(id, socket))
 
-      socket.compress(true).emit('msg', {
-        type: 'document',
-        payload: Automerge.save<SyncDoc>(doc)
-      })
-      this.backends[name].openConnection(id)
+        const doc = this.backends[name].automerge.getDocument(name)
 
-      this.garbageCursors(name)
+        socket.compress(true).emit('msg', {
+          type: 'document',
+          payload: Automerge.save<SyncDoc>(doc)
+        })
+        this.backends[name].automerge.openConnection(id)
 
-      onSocketConnection &&
-        (await onSocketConnection(socket, this.backendCounts))
-    } catch (e) {
-      console.log('Error in slate-collab onConnect', e)
+        this.garbageCursors(name)
+
+        onSocketConnection &&
+          (await onSocketConnection(socket, this.backendCounts))
+      } catch (e) {
+        console.log('Error in slate-collab onConnect', e)
+      }
     }
   }
 
@@ -188,7 +256,10 @@ export default class SocketIOCollaboration {
     switch (data.type) {
       case 'operation':
         try {
-          this.backends[name].receiveOperation(id, data)
+          this.backends[name].cleanupTimer =
+            Math.floor(Date.now() / 1000) +
+            (this.options.cleanThreshold || 30) * 60
+          this.backends[name].automerge.receiveOperation(id, data)
 
           this.autoSaveDoc(name)
 
@@ -216,7 +287,7 @@ export default class SocketIOCollaboration {
         return
       }
 
-      const doc = this.backends[docId].getDocument(docId)
+      const doc = this.backends[docId].automerge.getDocument(docId)
 
       if (!doc) {
         throw new Error(`Can't receive document by id: ${docId}`)
@@ -236,7 +307,7 @@ export default class SocketIOCollaboration {
     try {
       const { onSocketDisconnection } = this.options
 
-      this.backends[socket.nsp.name].closeConnection(id)
+      this.backends[socket.nsp.name].automerge.closeConnection(id)
       this.backendCounts[socket.nsp.name] =
         this.backendCounts[socket.nsp.name] - 1
 
@@ -249,17 +320,6 @@ export default class SocketIOCollaboration {
     } catch (e) {
       console.log('Error in slate-collab onDisconnect', e)
     }
-
-    try {
-      //if all the sockets have disconnected, free up that precious, precious memory.
-      if (this.backendCounts[socket.nsp.name] == 0) {
-        delete this.backends[socket.nsp.name]
-        delete this.backendCounts[socket.nsp.name]
-        delete this.io.nsps[socket.nsp.name]
-      }
-    } catch (e) {
-      console.log('Error freeing memory', e)
-    }
   }
 
   /**
@@ -268,7 +328,7 @@ export default class SocketIOCollaboration {
 
   garbageCursors = (nsp: string) => {
     try {
-      const doc = this.backends[nsp].getDocument(nsp)
+      const doc = this.backends[nsp].automerge.getDocument(nsp)
 
       if (!doc.cursors) return
 
@@ -276,7 +336,7 @@ export default class SocketIOCollaboration {
 
       Object.keys(doc?.cursors)?.forEach(key => {
         if (!namespace.sockets[key]) {
-          this.backends[nsp].garbageCursor(nsp, key)
+          this.backends[nsp].automerge.garbageCursor(nsp, key)
         }
       })
     } catch (e) {
