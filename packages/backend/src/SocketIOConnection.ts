@@ -123,32 +123,30 @@ export default class SocketIOCollaboration {
       if (!this.backends[path]) {
         this.backends[path] = {
           automerge: new AutomergeBackend(),
-          ready: false,
-          failed: false,
           cleanupTimer:
             Math.floor(Date.now() / 1000) +
-            (this.options.cleanThreshold || 30) * 60
+            (this.options.cleanThreshold || 30) * 60,
+          loadDocument: (async () => {
+            const automerge = new AutomergeBackend()
+
+            const doc = onDocumentLoad
+              ? await onDocumentLoad(path, query)
+              : this.options.defaultValue
+
+            if (doc) {
+              automerge.appendDocument(path, doc)
+              this.backends[path].automerge = automerge
+            }
+          })()
         }
-
-        this.backendCounts[path] = 1
-
-        if (!this.backends[path].automerge.getDocument(path)) {
-          const doc = onDocumentLoad
-            ? await onDocumentLoad(path, query)
-            : this.options.defaultValue
-
-          if (doc) {
-            this.backends[path].automerge.appendDocument(path, doc)
-            this.backends[path].ready = true
-          }
-        }
-      } else {
-        this.backendCounts[path] = this.backendCounts[path] + 1
+        this.backendCounts[path] = 0
       }
     } catch (e) {
       console.log('Error in slate-collab init', e)
-      this.backends[path].failed = true
     }
+
+    //return a promise for creating the automergebackend so we can await on that being done
+    return this.backends[path].loadDocument
   }
 
   /**
@@ -207,51 +205,45 @@ export default class SocketIOCollaboration {
    */
 
   private onConnect = async (socket: SocketIO.Socket) => {
-    //if this isn't the first connection and we're not set up yet, delay this for a second.
-    const { name } = socket.nsp
-    if (this.backends[name] && !this.backends[name].ready) {
-      setTimeout(() => {
-        this.onConnect(socket)
-      }, 1000)
-    } else {
-      try {
-        const { onSocketConnection } = this.options
-        const { id, conn } = socket
+    try {
+      const { name } = socket.nsp
+      const { onSocketConnection } = this.options
+      const { id, conn } = socket
 
-        await this.init(socket)
+      await this.init(socket)
+      this.backendCounts[name] = this.backendCounts[name] + 1
 
-        this.backends[name].automerge.createConnection(
-          id,
-          ({ type, payload }: CollabAction) => {
-            socket
-              .compress(false)
-              .emit('msg', { type, payload: { id: conn.id, ...payload } })
-          }
-        )
+      this.backends[name].automerge.createConnection(
+        id,
+        ({ type, payload }: CollabAction) => {
+          socket
+            .compress(false)
+            .emit('msg', { type, payload: { id: conn.id, ...payload } })
+        }
+      )
 
-        socket.on('msg', this.onMessage(id, name))
+      socket.on('msg', this.onMessage(id, name))
 
-        socket.on('disconnect', this.onDisconnect(id, socket))
+      socket.on('disconnect', this.onDisconnect(id, socket))
 
-        const doc = this.backends[name].automerge.getDocument(name)
+      const doc = this.backends[name].automerge.getDocument(name)
 
-        socket.compress(true).emit('msg', {
-          type: 'document',
-          payload: Automerge.save<SyncDoc>(doc)
-        })
-        this.backends[name].automerge.openConnection(id)
+      socket.compress(true).emit('msg', {
+        type: 'document',
+        payload: Automerge.save<SyncDoc>(doc)
+      })
+      this.backends[name].automerge.openConnection(id)
 
-        this.garbageCursors(name)
+      this.garbageCursors(name)
 
-        onSocketConnection &&
-          (await onSocketConnection({
-            docId: name,
-            socket,
-            _this: this
-          }))
-      } catch (e) {
-        console.log('Error in slate-collab onConnect', e)
-      }
+      onSocketConnection &&
+        (await onSocketConnection({
+          docId: name,
+          socket,
+          _this: this
+        }))
+    } catch (e) {
+      console.log('Error in slate-collab onConnect', e)
     }
   }
 
