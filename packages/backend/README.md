@@ -68,8 +68,16 @@ const connection = new SocketIOConnection(options)
     query?: Object
   ) => Promise<Node[]> | Node[]
   onDocumentSave: (pathname: string, doc: Node[]) => Promise<void> | void // save document callback
-  onSocketConnection?: () => void // socket connection callback
-  onSocketDisconnection?: () => void // socket disconnection callback
+  onSocketConnection?: ({
+    docId: string,
+    socket: SocketIO.Socket,
+    _this: SocketIOConnection
+  }) => void // socket connection callback
+  onSocketDisconnection?: ({
+    docId: string,
+    socket: SocketIO.Socket,
+    _this: SocketIOConnection
+  }) => void // socket disconnection callback
 }
 ```
 

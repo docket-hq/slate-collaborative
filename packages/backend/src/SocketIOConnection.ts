@@ -10,6 +10,7 @@ import { SyncDoc, CollabAction, toJS } from '@slate-sheikah/bridge'
 import { getClients } from './utils'
 
 import AutomergeBackend from './AutomergeBackend'
+import { SocketIOConnection } from 'index'
 
 export interface SocketIOCollaborationOptions {
   entry: Server
@@ -28,16 +29,20 @@ export interface SocketIOCollaborationOptions {
   ) => Promise<Node[]> | Node[]
   onDocumentSave?: (pathname: string, doc: Node[]) => Promise<void> | void
   onSocketConnection?: (
-    socket: SocketIO.Socket,
-    backendCounts: BackendCounts[]
+    metadata: ConnectionCallbackMeta
   ) => Promise<void> | void
   onSocketDisconnection?: (
-    socket: SocketIO.Socket,
-    backendCounts: BackendCounts[]
+    metadata: ConnectionCallbackMeta
   ) => Promise<void> | void
 }
 export interface BackendCounts {
   [key: string]: number
+}
+
+export interface ConnectionCallbackMeta {
+  docId: string
+  socket: SocketIO.Socket
+  _this: SocketIOConnection
 }
 
 export interface Backends {
@@ -74,8 +79,9 @@ export default class SocketIOCollaboration {
 
     this.backends = []
     this.backendCounts = []
+
     //spawn cleaner
-    setTimeout(() => {
+    setInterval(() => {
       this.cleaner()
     }, options.cleanFrequency || 60000)
 
@@ -174,9 +180,6 @@ export default class SocketIOCollaboration {
     } catch (e) {
       console.log('Error freeing memory', e)
     }
-    setTimeout(() => {
-      this.cleaner()
-    }, this.options.cleanFrequency || 60000)
   }
 
   /**
@@ -241,7 +244,11 @@ export default class SocketIOCollaboration {
         this.garbageCursors(name)
 
         onSocketConnection &&
-          (await onSocketConnection(socket, this.backendCounts))
+          (await onSocketConnection({
+            docId: name,
+            socket,
+            _this: this
+          }))
       } catch (e) {
         console.log('Error in slate-collab onConnect', e)
       }
@@ -256,9 +263,6 @@ export default class SocketIOCollaboration {
     switch (data.type) {
       case 'operation':
         try {
-          this.backends[name].cleanupTimer =
-            Math.floor(Date.now() / 1000) +
-            (this.options.cleanThreshold || 30) * 60
           this.backends[name].automerge.receiveOperation(id, data)
 
           this.autoSaveDoc(name)
@@ -307,6 +311,10 @@ export default class SocketIOCollaboration {
     try {
       const { onSocketDisconnection } = this.options
 
+      //increment the cleanup timer
+      this.backends[socket.nsp.name].cleanupTimer =
+        Math.floor(Date.now() / 1000) + (this.options.cleanThreshold || 30) * 60
+
       this.backends[socket.nsp.name].automerge.closeConnection(id)
       this.backendCounts[socket.nsp.name] =
         this.backendCounts[socket.nsp.name] - 1
@@ -316,7 +324,11 @@ export default class SocketIOCollaboration {
       this.garbageCursors(socket.nsp.name)
 
       onSocketDisconnection &&
-        (await onSocketDisconnection(socket, this.backendCounts))
+        (await onSocketDisconnection({
+          docId: socket.nsp.name,
+          socket,
+          _this: this
+        }))
     } catch (e) {
       console.log('Error in slate-collab onDisconnect', e)
     }
