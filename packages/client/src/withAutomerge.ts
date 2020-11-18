@@ -83,8 +83,8 @@ const withAutomerge = <T extends Editor>(
    * Receive document value
    */
 
-  e.receiveDocument = (data, onDocumentLoaded) => {
-    AutomergeEditor.receiveDocument(e, docId, data, onDocumentLoaded)
+  e.receiveDocument = (id, data, onDocumentLoaded) => {
+    AutomergeEditor.receiveDocument(id, e, docId, data, onDocumentLoaded)
 
     createConnection()
   }
