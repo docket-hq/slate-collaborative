@@ -122,6 +122,7 @@ export default class SocketIOCollaboration {
       //make some backends if this is the first time this meeting is loaded.
       if (!this.backends[path]) {
         this.backends[path] = {
+          id: Date.now(),
           automerge: new AutomergeBackend(),
           cleanupTimer:
             Math.floor(Date.now() / 1000) +
@@ -230,6 +231,7 @@ export default class SocketIOCollaboration {
 
       socket.compress(true).emit('msg', {
         type: 'document',
+        id: this.backends[name].id,
         payload: Automerge.save<SyncDoc>(doc)
       })
       this.backends[name].automerge.openConnection(id)

@@ -102,7 +102,7 @@ const withSocketIO = <T extends AutomergeEditor>(
       case 'operation':
         return e.receiveOperation(msg.payload)
       case 'document':
-        return e.receiveDocument(msg.payload, onDocumentLoaded)
+        return e.receiveDocument(msg.id, msg.payload, onDocumentLoaded)
     }
   }
 

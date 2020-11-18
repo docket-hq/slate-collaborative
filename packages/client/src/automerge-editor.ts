@@ -27,7 +27,11 @@ export interface AutomergeEditor extends Editor {
   openConnection: () => void
   closeConnection: () => void
 
-  receiveDocument: (data: string, onDocumentLoaded: () => void) => void
+  receiveDocument: (
+    id: string | undefined,
+    data: string,
+    onDocumentLoaded: () => void
+  ) => void
   receiveOperation: (data: Automerge.Message) => void
 
   gabageCursor: () => void
@@ -87,10 +91,11 @@ export const AutomergeEditor = {
    */
 
   receiveDocument: (
+    id: string | undefined,
     e: AutomergeEditor,
     docId: string,
     data: string,
-    onDocumentLoaded: () => void
+    onDocumentLoaded: (id?: string) => void
   ) => {
     const currentDoc = e.docSet.getDoc(docId)
     const externalDoc = Automerge.load<SyncDoc>(data)
@@ -106,7 +111,7 @@ export const AutomergeEditor = {
       e.children = toJS(mergedDoc).children
 
       e.onChange()
-      onDocumentLoaded()
+      onDocumentLoaded(id)
     })
   },
 
