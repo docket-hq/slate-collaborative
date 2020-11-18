@@ -57,6 +57,8 @@ const connection = new SocketIOConnection(options)
   entry: Server // or specify port to start io server
   defaultValue: Node[] // default value
   saveFrequency: number // frequency of onDocumentSave callback execution in ms
+  cleanFrequency: number // frequency of cleaner runs in ms, defaults to 60000 (1 minute)
+  cleanThreshold: number // how long after all the connections have closed before allowing memory recovery in minutes defaults, to 30 minutes
   onAuthRequest: ( // auth callback
     query: Object,
     socket?: SocketIO.Socket
@@ -66,8 +68,16 @@ const connection = new SocketIOConnection(options)
     query?: Object
   ) => Promise<Node[]> | Node[]
   onDocumentSave: (pathname: string, doc: Node[]) => Promise<void> | void // save document callback
-  onSocketConnection?: () => void // socket connection callback
-  onSocketDisconnection?: () => void // socket disconnection callback
+  onSocketConnection?: ({
+    docId: string,
+    socket: SocketIO.Socket,
+    _this: SocketIOConnection
+  }) => void // socket connection callback
+  onSocketDisconnection?: ({
+    docId: string,
+    socket: SocketIO.Socket,
+    _this: SocketIOConnection
+  }) => void // socket disconnection callback
 }
 ```
 
