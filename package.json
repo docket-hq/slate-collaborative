@@ -11,7 +11,7 @@
     "build": "lerna run build:module --stream",
     "watch": "lerna run --parallel watch",
     "clean:module": "lerna clean --yes",
-    "prebuild": "yarn clean",
+    "prebuild": "yarn clean & node version-sync.js",
     "test": "lerna run test --stream",
     "format": "prettier --write"
   },
