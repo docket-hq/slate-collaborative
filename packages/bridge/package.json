@@ -25,7 +25,7 @@
     "test": "jest"
   },
   "dependencies": {
-    "automerge": "0.14.0",
+    "automerge": "0.14.2",
     "slate": "0.58.3",
     "typescript": "^3.8.3"
   },
