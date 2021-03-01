@@ -74,7 +74,10 @@ export default class SocketIOCollaboration {
 
     this.autoSaveDoc = debounce(
       this.saveDocument,
-      options.saveFrequency || 2000
+      options.saveFrequency || 2000,
+      {
+        maxWait: options.saveFrequency || 2000
+      }
     )
 
     this.backends = []
