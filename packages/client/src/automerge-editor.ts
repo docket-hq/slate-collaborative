@@ -113,6 +113,8 @@ export const AutomergeEditor = {
       e.onCursor && e.onCursor(doc.cursors)
     })
 
+    // onChange expect valid doc, we make sure do normalization before that.
+    Editor.normalize(e, { force: true })
     e.onChange()
     onDocumentLoaded(id)
   },
