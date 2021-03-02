@@ -3,7 +3,7 @@ import * as Automerge from 'automerge'
 import { Node } from 'slate'
 import { Server } from 'http'
 
-import throttle from 'lodash/throttle'
+import debounce from 'lodash/debounce'
 
 import { SyncDoc, CollabAction, toJS } from '@slate-sheikah/bridge'
 
@@ -72,9 +72,12 @@ export default class SocketIOCollaboration {
 
     this.configure()
 
-    this.autoSaveDoc = throttle(
+    this.autoSaveDoc = debounce(
       this.saveDocument,
-      options.saveFrequency || 2000
+      options.saveFrequency || 2000,
+      {
+        maxWait: options.saveFrequency || 2000
+      }
     )
 
     this.backends = []
