@@ -108,11 +108,13 @@ export const AutomergeEditor = {
     e.docSet.setDoc(docId, mergedDoc)
 
     Editor.withoutNormalizing(e, () => {
-      e.children = toJS(mergedDoc).children
-
-      e.onChange()
-      onDocumentLoaded(id)
+      const doc = toJS(mergedDoc)
+      e.children = doc.children
+      e.onCursor && e.onCursor(doc.cursors)
     })
+
+    e.onChange()
+    onDocumentLoaded(id)
   },
 
   /**
@@ -135,7 +137,8 @@ export const AutomergeEditor = {
       if (operations.length) {
         const slateOps = toSlateOp(operations, current)
 
-        e.isRemote = true
+        // do not change isRemote flag for no-op case.
+        const wasRemote = e.isRemote
 
         Editor.withoutNormalizing(e, () => {
           if (HistoryEditor.isHistoryEditor(e) && !preserveExternalHistory) {
@@ -149,7 +152,12 @@ export const AutomergeEditor = {
           e.onCursor && e.onCursor(updated.cursors)
         })
 
-        Promise.resolve().then(_ => (e.isRemote = false))
+        if (slateOps.length > 0) {
+          // XXX: only schedule set isRemote false when we did scheduled onChange by apply.
+          Promise.resolve().then(_ => (e.isRemote = false))
+        } else {
+          e.isRemote = wasRemote
+        }
       }
     } catch (e) {
       console.error(e)
@@ -159,7 +167,7 @@ export const AutomergeEditor = {
   garbageCursor: (e: AutomergeEditor, docId: string) => {
     const doc = e.docSet.getDoc(docId)
 
-    const changed = Automerge.change<SyncDoc>(doc, (d: any) => {
+    const changed = Automerge.change(doc, (d: any) => {
       delete d.cursors
     })
 
