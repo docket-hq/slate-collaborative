@@ -7,12 +7,14 @@ import { CollabAction } from '@slate-sheikah/bridge'
 export interface SocketIOPluginOptions {
   url: string
   connectOpts: SocketIOClient.ConnectOpts
+  presenceData?: Object
   autoConnect?: boolean
 
   onConnect?: () => void
   onDisconnect?: () => void
   onError?: (msg: string) => void
   onDocumentLoaded?: () => void
+  onParticipantChange?: (msg: string) => void
 }
 
 export interface WithSocketIOEditor {
@@ -39,8 +41,10 @@ const withSocketIO = <T extends AutomergeEditor>(
     onConnect,
     onDisconnect,
     onDocumentLoaded = () => {},
+    onParticipantChange = (msg: Object) => {},
     onError,
     connectOpts,
+    presenceData,
     url,
     autoConnect
   } = options
@@ -48,9 +52,13 @@ const withSocketIO = <T extends AutomergeEditor>(
   /**
    * Connect to Socket.
    */
-
   e.connect = () => {
     if (!e.socket) {
+      connectOpts.query = connectOpts.query || {}
+      connectOpts.query = {
+        ...connectOpts.query,
+        ...{ presenceData: JSON.stringify(presenceData || {}) }
+      }
       e.socket = io(url, { ...connectOpts })
 
       e.socket.on('connect', () => {
@@ -103,6 +111,8 @@ const withSocketIO = <T extends AutomergeEditor>(
         return e.receiveOperation(msg.payload)
       case 'document':
         return e.receiveDocument(msg.id, msg.payload, onDocumentLoaded)
+      case 'participant':
+        return onParticipantChange && onParticipantChange(msg.payload)
     }
   }
 
