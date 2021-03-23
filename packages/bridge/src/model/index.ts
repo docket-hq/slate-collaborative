@@ -5,7 +5,7 @@ export type SyncValue = Automerge.List<Node>
 
 export type SyncDoc = Automerge.Doc<{ children: SyncValue; cursors: Cursors }>
 
-export type CollabActionType = 'operation' | 'document'
+export type CollabActionType = 'operation' | 'document' | 'participant'
 
 export interface CollabAction {
   id?: string

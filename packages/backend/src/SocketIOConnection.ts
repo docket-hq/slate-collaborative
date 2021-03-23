@@ -144,6 +144,7 @@ export default class SocketIOCollaboration {
           })()
         }
         this.backendCounts[path] = 0
+        this.backends[path].presenceData = {}
       }
     } catch (e) {
       console.log('Error in slate-collab init', e)
@@ -214,8 +215,15 @@ export default class SocketIOCollaboration {
       const { onSocketConnection } = this.options
       const { id, conn } = socket
 
+      //try to pull presence data out of the payload.
+      let presenceData = {}
+      try {
+        presenceData = JSON.parse(socket.handshake.query.presenceData)
+      } catch (e) {}
+
       await this.init(socket)
       this.backendCounts[name] = this.backendCounts[name] + 1
+      this.backends[name].presenceData[id] = presenceData
 
       this.backends[name].automerge.createConnection(
         id,
@@ -232,11 +240,22 @@ export default class SocketIOCollaboration {
 
       const doc = this.backends[name].automerge.getDocument(name)
 
+      //send document
       socket.compress(true).emit('msg', {
         type: 'document',
         id: this.backends[name].id,
         payload: Automerge.save<SyncDoc>(doc)
       })
+
+      //send presence information to namespace
+      this.io
+        .of(name)
+        .compress(false)
+        .emit('msg', {
+          type: 'participant',
+          payload: Object.values(this.backends[name].presenceData)
+        })
+
       this.backends[name].automerge.openConnection(id)
 
       this.garbageCursors(name)
@@ -307,22 +326,32 @@ export default class SocketIOCollaboration {
   private onDisconnect = (id: string, socket: SocketIO.Socket) => async () => {
     try {
       const { onSocketDisconnection } = this.options
+      const name = socket.nsp.name
 
       //increment the cleanup timer
-      this.backends[socket.nsp.name].cleanupTimer =
+      this.backends[name].cleanupTimer =
         Math.floor(Date.now() / 1000) + (this.options.cleanThreshold || 30) * 60
 
-      this.backends[socket.nsp.name].automerge.closeConnection(id)
-      this.backendCounts[socket.nsp.name] =
-        this.backendCounts[socket.nsp.name] - 1
+      this.backends[name].automerge.closeConnection(id)
+      this.backendCounts[name] = this.backendCounts[name] - 1
+      delete this.backends[name].presenceData[socket.id]
 
-      await this.saveDocument(socket.nsp.name)
+      //send presence information to namespace
+      this.io
+        .of(name)
+        .compress(false)
+        .emit('msg', {
+          type: 'participant',
+          payload: Object.values(this.backends[name].presenceData)
+        })
 
-      this.garbageCursors(socket.nsp.name)
+      await this.saveDocument(name)
+
+      this.garbageCursors(name)
 
       onSocketDisconnection &&
         (await onSocketDisconnection({
-          docId: socket.nsp.name,
+          docId: name,
           socket,
           _this: this
         }))

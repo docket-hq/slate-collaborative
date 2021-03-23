@@ -26,11 +26,13 @@ Check [detailed example](https://github.com/docket-hq/slate-sheikah/blob/master/
   url?: string // url to open connection
   connectOpts?: SocketIOClient.ConnectOpts // socket.io-client options
   cursorData?: any // any data passed to cursor
+  presenceData?: Object //any object data that represents a participant in the meeting.  This will get echoed back through the onParticipantChange when people join and leave the document.
   onConnect?: () => void // connect callback
   onDisconnect?: () => void // disconnect callback
   onError?: (reason: string) => void // error callback
   preserveExternalHistory?: boolean // preserve slate-history operations form other clients
   onDocumentLoaded(id)?: => void // callback that runs once a document is loaded on the client, takes internal id of document (can be used to tell if the document you have in memory matches the one on the server)
+  onParticipantChange = (msg: Object) => void // callback called when the participants change. message contains an array of participants as defined in presenceData
 }
 ```
 
