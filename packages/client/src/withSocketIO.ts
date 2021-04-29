@@ -25,6 +25,7 @@ export interface WithSocketIOEditor {
 
   send: (op: CollabAction) => void
   receive: (op: CollabAction) => void
+  flush: () => void
 }
 
 /**
@@ -122,6 +123,13 @@ const withSocketIO = <T extends AutomergeEditor>(
 
   e.send = (msg: CollabAction) => {
     e.socket.emit('msg', msg)
+  }
+
+  /**
+   * sends flush to socket.
+   */
+  e.flush = () => {
+    e.socket.emit('flush')
   }
 
   autoConnect && e.connect()
