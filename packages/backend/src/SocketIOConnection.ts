@@ -235,6 +235,7 @@ export default class SocketIOCollaboration {
       )
 
       socket.on('msg', this.onMessage(id, name))
+      socket.on('flush', this.onFlush(name))
 
       socket.on('disconnect', this.onDisconnect(id, socket))
 
@@ -285,8 +286,21 @@ export default class SocketIOCollaboration {
 
           this.garbageCursors(name)
         } catch (e) {
-          console.log(e)
+          console.log('Error in OnMessage/operation', e)
         }
+    }
+  }
+
+  /**
+   * forces the backend to save the document
+   * @param name
+   */
+  private onFlush = (name: string) => (data: any) => {
+    try {
+      console.log(`Flushing document ${name} to the database.`)
+      this.autoSaveDoc(name)
+    } catch (e) {
+      console.log(`Error flushing document ${name} to database`, e)
     }
   }
 
@@ -315,7 +329,7 @@ export default class SocketIOCollaboration {
 
       onDocumentSave && (await onDocumentSave(docId, toJS(doc.children)))
     } catch (e) {
-      console.error(e, docId)
+      console.error('Error in saveDocument.', e, docId)
     }
   }
 
@@ -332,7 +346,14 @@ export default class SocketIOCollaboration {
       this.backends[name].cleanupTimer =
         Math.floor(Date.now() / 1000) + (this.options.cleanThreshold || 30) * 60
 
-      this.backends[name].automerge.closeConnection(id)
+      /**
+       * wrap the automerge closeConnection call in a timeout to give any outstanding messages
+       * time to flush to the database
+       */
+      setTimeout(() => {
+        this.backends[name].automerge.closeConnection(id)
+      }, 5000)
+
       this.backendCounts[name] = this.backendCounts[name] - 1
       delete this.backends[name].presenceData[socket.id]
 
