@@ -9,3 +9,4 @@ yarn-error.log
 .idea
 tsconfig.tsbuildinfo
 **.code-workspace
+package-lock.js
