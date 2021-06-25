@@ -11,6 +11,9 @@
     "type": "git",
     "url": "git+https://github.com/docket-hq/slate-sheikah.git"
   },
+  "browserslist": [
+    "since 2017-06"
+  ],
   "keywords": [
     "slate",
     "automerge",
